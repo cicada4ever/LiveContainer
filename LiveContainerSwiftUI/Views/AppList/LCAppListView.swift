@@ -80,6 +80,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
+    @AppStorage("LCAppDisplayStyle", store: LCUtils.appGroupUserDefault) private var appDisplayStyle = "list"
     
     @State private var isViewAppeared = false
     
@@ -131,73 +132,56 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 })
                 .hidden()
                 
-                LazyVStack {
-                    ForEach(filteredApps, id: \.self) { app in
-                        LCAppBanner(appModel: app, delegate: self)
-                    }
-                    .transition(.scale)
-                }
-                .padding()
-                .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredApps)
+                appCollection(for: filteredApps)
+                    .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredApps)
 
-                VStack {
+                VStack(alignment: .leading, spacing: 8) {
                     if LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding") {
                         if sharedModel.isHiddenAppUnlocked {
-                            LazyVStack {
-                                HStack {
-                                    Text("lc.appList.hiddenApps".loc)
-                                        .font(.system(.title2).bold())
-                                    Spacer()
-                                }
-                                
-                                ForEach(filteredHiddenApps, id: \.self) { app in
-                                    LCAppBanner(appModel: app, delegate: self)
-                                }
-                                .transition(.scale)
-                                
-                            }
-                            .padding()
-                            .transition(.opacity)
-                            .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredHiddenApps)
-                            
-                            if sharedModel.hiddenApps.count == 0 {
-                                Text("lc.appList.hideAppTip".loc)
-                                    .foregroundStyle(.gray)
-                            }
-                        }
-                    } else if sharedModel.hiddenApps.count > 0 {
-                        LazyVStack {
                             HStack {
                                 Text("lc.appList.hiddenApps".loc)
                                     .font(.system(.title2).bold())
                                 Spacer()
                             }
-                            ForEach(filteredHiddenApps, id: \.self) { app in
-                                if sharedModel.isHiddenAppUnlocked {
-                                    LCAppBanner(appModel: app, delegate: self)
-                                } else {
-                                    LCAppSkeletonBanner()
-                                }
-                            }
-                            .animation(.easeInOut, value: sharedModel.isHiddenAppUnlocked)
-                            .onTapGesture {
-                                Task { await authenticateUser() }
+                            .padding(.horizontal, 16)
+
+                            appCollection(for: filteredHiddenApps)
+                                .transition(.opacity)
+
+                            if sharedModel.hiddenApps.isEmpty {
+                                Text("lc.appList.hideAppTip".loc)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 16)
                             }
                         }
-                        .padding()
-                        .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredHiddenApps)
+                    } else if !sharedModel.hiddenApps.isEmpty {
+                        HStack {
+                            Text("lc.appList.hiddenApps".loc)
+                                .font(.system(.title2).bold())
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+
+                        if sharedModel.isHiddenAppUnlocked {
+                            appCollection(for: filteredHiddenApps)
+                        } else {
+                            hiddenAppsSkeleton()
+                                .onTapGesture {
+                                    Task { await authenticateUser() }
+                                }
+                        }
                     }
 
                     let appCount = sharedModel.isHiddenAppUnlocked ? filteredApps.count + filteredHiddenApps.count : filteredApps.count
                     Text(appCount > 0 || searchContext.debouncedQuery != "" ? "lc.appList.appCounter %lld".localizeWithFormat(appCount) : (sharedModel.multiLCStatus == 2 ? "lc.appList.convertToSharedToShowInLC2".loc : "lc.appList.installTip".loc))
                         .padding(.horizontal)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.secondary)
                         .animation(searchContext.isTyping ? nil : .easeInOut, value: appCount)
                         .onTapGesture(count: 3) {
                             Task { await authenticateUser() }
                         }
-                }.animation(searchContext.isTyping ? nil : .easeInOut, value: LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding"))
-
+                }
+                .animation(searchContext.isTyping ? nil : .easeInOut, value: LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding"))
                 if sharedModel.multiLCStatus == 2 {
                     Text("lc.appList.manageInPrimaryTip".loc).foregroundStyle(.gray).padding()
                 }
@@ -435,6 +419,94 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
     }
     
+    private var appGridColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 64, maximum: 88), spacing: 16)]
+    }
+
+    @ViewBuilder
+    private func appCollection(for apps: [LCAppModel]) -> some View {
+        if appDisplayStyle == "grid" {
+            LazyVGrid(columns: appGridColumns, alignment: .center, spacing: 24) {
+                ForEach(apps, id: \.self) { app in
+                    appItem(app, isGrid: true)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(apps, id: \.self) { app in
+                    appItem(app, isGrid: false)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func appItem(_ app: LCAppModel, isGrid: Bool) -> some View {
+        LCNativeAppItem(
+            model: app,
+            isGrid: isGrid,
+            delegate: self,
+            onLaunch: { selectedApp, multitask in
+                launchApp(selectedApp, multitask: multitask)
+            },
+            onError: { message in
+                errorInfo = message
+                errorShow = true
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func hiddenAppsSkeleton() -> some View {
+        if appDisplayStyle == "grid" {
+            LazyVGrid(columns: appGridColumns, spacing: 24) {
+                ForEach(0..<4, id: \.self) { _ in
+                    VStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(Color.secondary.opacity(0.12))
+                            .frame(width: 64, height: 64)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.secondary.opacity(0.12))
+                            .frame(width: 56, height: 7)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(0..<4, id: \.self) { _ in
+                    LCAppSkeletonBanner()
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func launchApp(_ app: LCAppModel, multitask: Bool? = nil) {
+        Task {
+            if app.appInfo.isLocked && !sharedModel.isHiddenAppUnlocked {
+                do {
+                    guard try await LCUtils.authenticateUser() else { return }
+                } catch {
+                    errorInfo = error.localizedDescription
+                    errorShow = true
+                    return
+                }
+            }
+
+            do {
+                try await app.runApp(multitask: multitask)
+            } catch {
+                errorInfo = error.localizedDescription
+                errorShow = true
+            }
+        }
+    }
+
     var JITEnablingModal : some View {
         NavigationView {
             ScrollViewReader { proxy in
@@ -1228,6 +1300,308 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
     
 }
+
+
+private struct LCAppIconDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.png] }
+
+    let data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.data = data
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
+private struct LCNativeAppItem: View {
+    @ObservedObject var model: LCAppModel
+    let isGrid: Bool
+    let delegate: LCAppBannerDelegate
+    let onLaunch: (LCAppModel, Bool?) -> Void
+    let onError: (String) -> Void
+
+    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
+    @State private var showingUninstallConfirmation = false
+    @State private var iconExportDocument: LCAppIconDocument?
+    @State private var isExportingIcon = false
+    @State private var iconExportName = "App Icon"
+
+    private var appIcon: UIImage {
+        model.appInfo.iconIsDarkIcon(darkModeIcon) ?? UIImage()
+    }
+
+    var body: some View {
+        Button {
+            onLaunch(model, nil)
+        } label: {
+            Group {
+                if isGrid {
+                    gridContent
+                } else {
+                    listContent
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(model.displayName), \(model.version)")
+        .contextMenu {
+            if model.uiContainers.count > 1 {
+                Menu("Containers") {
+                    ForEach(model.uiContainers, id: \.folderName) { container in
+                        Button {
+                            model.uiSelectedContainer = container
+                        } label: {
+                            if container.folderName == model.uiSelectedContainer?.folderName {
+                                Label(container.name, systemImage: "checkmark")
+                            } else {
+                                Text(container.name)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !model.uiIsShared, model.uiSelectedContainer != nil {
+                Button {
+                    openDataFolder()
+                } label: {
+                    Label("lc.appBanner.openDataFolder".loc, systemImage: "folder")
+                }
+            }
+
+            if #available(iOS 16.0, *) {
+                Button {
+                    onLaunch(model, !model.shouldLaunchInMultitaskMode)
+                } label: {
+                    Label(
+                        model.shouldLaunchInMultitaskMode ? "lc.appBanner.run".loc : "lc.appBanner.multitask".loc,
+                        systemImage: model.shouldLaunchInMultitaskMode ? "play.fill" : "macwindow.badge.plus"
+                    )
+                }
+                .disabled(model.isAppRunning)
+            }
+
+            Menu("lc.appBanner.addToHomeScreen".loc) {
+                Button {
+                    copyLaunchURL()
+                } label: {
+                    Label("lc.appBanner.copyLaunchUrl".loc, systemImage: "link")
+                }
+
+                Button {
+                    Task { await prepareIconExport() }
+                } label: {
+                    Label("lc.appBanner.saveAppIcon".loc, systemImage: "square.and.arrow.down")
+                }
+
+                Button {
+                    createAppClip()
+                } label: {
+                    Label("lc.appBanner.createAppClip".loc, systemImage: "appclip")
+                }
+            }
+
+            Button {
+                delegate.openNavigationView(view: AnyView(LCAppSettingsView(model: model)))
+            } label: {
+                Label("lc.tabView.settings".loc, systemImage: "gear")
+            }
+
+            if !model.uiIsShared {
+                Button(role: .destructive) {
+                    showingUninstallConfirmation = true
+                } label: {
+                    Label("lc.appBanner.uninstall".loc, systemImage: "trash")
+                }
+            }
+        }
+        .confirmationDialog(
+            "lc.appBanner.confirmUninstallTitle".loc,
+            isPresented: $showingUninstallConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("lc.appBanner.uninstall".loc, role: .destructive) {
+                uninstallApp(deleteData: false)
+            }
+
+            if !model.appInfo.containers.isEmpty {
+                Button("Uninstall & Delete Data", role: .destructive) {
+                    uninstallApp(deleteData: true)
+                }
+            }
+
+            Button("lc.common.cancel".loc, role: .cancel) {}
+        } message: {
+            Text("lc.appBanner.confirmUninstallMsg %@".localizeWithFormat(model.displayName))
+        }
+        .fileExporter(
+            isPresented: $isExportingIcon,
+            document: iconExportDocument,
+            contentType: .png,
+            defaultFilename: iconExportName
+        ) { result in
+            if case .failure(let error) = result {
+                onError(error.localizedDescription)
+            }
+            iconExportDocument = nil
+        }
+    }
+
+    private var listContent: some View {
+        HStack(spacing: 14) {
+            iconView(size: 56)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.displayName)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(model.version)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(uiColor: .separator))
+                .frame(height: 0.5)
+                .padding(.leading, 70)
+        }
+    }
+
+    private var gridContent: some View {
+        VStack(spacing: 7) {
+            iconView(size: 66)
+
+            Text(model.displayName)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity)
+
+            Text(model.version)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+
+    private func iconView(size: CGFloat) -> some View {
+        Image(uiImage: appIcon)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    private func openDataFolder() {
+        guard let folderName = model.uiSelectedContainer?.folderName,
+              let url = URL(string: "shareddocuments://\(LCPath.dataPath.path)/\(folderName)") else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    private func copyLaunchURL() {
+        guard let relativeBundlePath = model.appInfo.relativeBundlePath else {
+            return
+        }
+
+        if let folderName = model.uiSelectedContainer?.folderName {
+            UIPasteboard.general.string = "livecontainer://livecontainer-launch?bundle-name=\(relativeBundlePath)&container-folder-name=\(folderName)"
+        } else {
+            UIPasteboard.general.string = "livecontainer://livecontainer-launch?bundle-name=\(relativeBundlePath)"
+        }
+    }
+
+    private func prepareIconExport() async {
+        guard let style = await delegate.promptForGeneratedIconStyle() else {
+            return
+        }
+
+        guard let image = model.appInfo.generateLiveContainerWrappedIcon(with: style),
+              let data = image.pngData() else {
+            onError("Unable to generate the app icon.")
+            return
+        }
+
+        iconExportName = model.displayName.replacingOccurrences(of: "/", with: "_") + " Icon"
+        iconExportDocument = LCAppIconDocument(data: data)
+        isExportingIcon = true
+    }
+
+    private func createAppClip() {
+        Task {
+            guard let style = await delegate.promptForGeneratedIconStyle() else {
+                return
+            }
+
+            do {
+                guard let profile = model.appInfo.generateWebClipConfig(
+                    withContainerId: model.uiSelectedContainer?.folderName,
+                    iconStyle: style
+                ) else {
+                    throw CocoaError(.propertyListWriteInvalid)
+                }
+
+                let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .xml, options: 0)
+                delegate.installMdm(data: data)
+            } catch {
+                onError(error.localizedDescription)
+            }
+        }
+    }
+
+    private func uninstallApp(deleteData: Bool) {
+        Task {
+            do {
+                guard let bundlePath = model.appInfo.bundlePath() else {
+                    throw CocoaError(.fileNoSuchFile)
+                }
+
+                try FileManager.default.removeItem(atPath: bundlePath)
+                delegate.removeApp(app: model)
+
+                if deleteData {
+                    for container in model.appInfo.containers {
+                        let dataUUID = container.folderName
+                        try FileManager.default.removeItem(at: LCPath.dataPath.appendingPathComponent(dataUUID))
+                        LCUtils.removeAppKeychain(dataUUID: dataUUID)
+                        DataManager.shared.model.appDataFolderNames.removeAll { $0 == dataUUID }
+                    }
+                }
+            } catch {
+                onError(error.localizedDescription)
+            }
+        }
+    }
+}
+
 
 extension View {
     func apply<V: View>(@ViewBuilder _ block: (Self) -> V) -> V { block(self) }
