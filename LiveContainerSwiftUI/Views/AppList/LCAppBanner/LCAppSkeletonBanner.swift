@@ -7,34 +7,30 @@ import SwiftUI
 
 struct LCAppSkeletonBanner: View {
     var body: some View {
-        HStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 60, height: 60)
-            
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.secondary.opacity(0.12))
+                .frame(width: 56, height: 56)
+
+            VStack(alignment: .leading, spacing: 6) {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 100, height: 16)
-                
+                    .fill(Color.secondary.opacity(0.12))
+                    .frame(width: 112, height: 14)
+
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 150, height: 12)
-                
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 120, height: 8)
+                    .fill(Color.secondary.opacity(0.12))
+                    .frame(width: 72, height: 10)
             }
-            
-            Spacer()
-            
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 70, height: 32)
+
+            Spacer(minLength: 0)
         }
-        .padding()
-        .frame(height: 88)
-        .background(RoundedRectangle(cornerRadius: 22).fill(Color.gray.opacity(0.1)))
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 76)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(uiColor: .separator))
+                .frame(height: 0.5)
+                .padding(.leading, 70)
+        }
     }
-    
 }
