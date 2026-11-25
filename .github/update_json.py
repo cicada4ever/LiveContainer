@@ -332,7 +332,10 @@ Nightly build from [{commit_sha}](https://github.com/LiveContainer/LiveContainer
 
 
 def main():
-    repo_url = "LiveContainer/LiveContainer"
+    # Resolve release assets from the repository running this workflow (supports forks).
+    repo_url = os.environ.get("GITHUB_REPOSITORY", "LiveContainer/LiveContainer")
+    # Keep the canonical source as the template for the SideStore catalog.
+    source_repo_url = "LiveContainer/LiveContainer"
     is_nightly = "NIGHTLY_LINK" in os.environ
 
     try:
@@ -340,11 +343,11 @@ def main():
         if is_nightly:
             json_file = "./.github/apps_nightly.json"
             update_json_file_nightly(json_file, fetched_data_latest)
-            update_json_file_release_ss_lc(repo_url, "./.github/apps_ss_lc.json", fetched_data_latest, True)
+            update_json_file_release_ss_lc(source_repo_url, "./.github/apps_ss_lc.json", fetched_data_latest, True)
         else:
             json_file = "./.github/apps.json"
             update_json_file_release(repo_url, json_file, fetched_data_latest)
-            update_json_file_release_ss_lc(repo_url, "./.github/apps_ss_lc.json", fetched_data_latest, False)
+            update_json_file_release_ss_lc(source_repo_url, "./.github/apps_ss_lc.json", fetched_data_latest, False)
     except Exception as e:
         print(f"An error occurred: {e}")
         raise
