@@ -116,34 +116,25 @@ jobs:
           echo "COMMIT_MSG=$COMMIT_MSG" >> $GITHUB_ENV
       - name: Create or update nightly release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           RELEASE_BODY: |
-            **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-            **Message:** ${{ github.event.head_commit.message }}
+            **Commit:** [\${{ github.sha }}](https://github.com/\${{ github.repository }}/commit/\${{ github.sha }})
+            **Message:** \${{ github.event.head_commit.message }}
 
-            This is a nightly release [created automatically with GitHub Actions workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}).
+            This is a nightly release [created automatically with GitHub Actions workflow](\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}/attempts/\${{ github.run_attempt }}).
         run: |
           set -euo pipefail
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --title "Nightly Release @ \${GITHUB_RUN_NUMBER}" --notes "$RELEASE_BODY" --prerelease
+          else
+            gh release create nightly --title "Nightly Release @ \${GITHUB_RUN_NUMBER}" --notes "$RELEASE_BODY" --prerelease
+          fi
           for attempt in 1 2 3; do
-            if gh release view nightly >/dev/null 2>&1; then
-              break
-            fi
-            if gh release create nightly --title "Nightly Release @ ${GITHUB_RUN_NUMBER}" --notes "$RELEASE_BODY" --prerelease; then
+            if gh release upload nightly "\${{ needs.build.outputs.artifact }}" "\${{ needs.build.outputs.artifact2 }}" --clobber; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then
-              echo "Failed to create or find nightly release after 3 attempts" >&2
-              exit 1
-            fi
-            sleep 5
-          done
-          gh release edit nightly --title "Nightly Release @ ${GITHUB_RUN_NUMBER}" --notes "$RELEASE_BODY" --prerelease
-          for attempt in 1 2 3; do
-            if gh release upload nightly "${{ needs.build.outputs.artifact }}" "${{ needs.build.outputs.artifact2 }}" .github/apps_nightly.json --clobber; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "Failed to upload nightly release assets after 3 attempts" >&2
+              echo "Failed to upload nightly IPA assets after 3 attempts" >&2
               exit 1
             fi
             sleep 5
@@ -151,18 +142,44 @@ jobs:
       - name: Update AltStore source
         id: update_source
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NIGHTLY_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
-          commit_sha: ${{ env.COMMIT_SHA }}
-          commit_msg: ${{ env.COMMIT_MSG }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_LINK: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}/attempts/\${{ github.run_attempt }}
+          commit_sha: \${{ env.COMMIT_SHA }}
+          commit_msg: \${{ env.COMMIT_MSG }}
         run: |
           python .github/update_json.py
+      - name: Upload updated nightly source
+        env:
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if gh release upload nightly .github/apps_nightly.json --clobber; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to upload generated nightly source JSON after 3 attempts" >&2
+              exit 1
+            fi
+            sleep 5
+          done
       - name: Ensure stable release exists and upload SideStore source
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if ! gh release view 1.0 >/dev/null 2>&1; then
-            gh release create 1.0 --title "1.0" --notes "Stable release metadata for this fork." --target 1.0
+            # The fork already has the 1.0 Git tag. Create only the missing
+            # GitHub Release object and refuse to synthesize a new tag.
+            gh release create 1.0 --title "1.0" --notes "Stable release metadata for this fork." --verify-tag
           fi
-          gh release upload 1.0 .github/apps_ss_lc.json --clobber
+          for attempt in 1 2 3; do
+            if gh release upload 1.0 .github/apps_ss_lc.json --clobber; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to upload SideStore source JSON to the 1.0 release after 3 attempts" >&2
+              exit 1
+            fi
+            sleep 5
+          done
