@@ -123,20 +123,40 @@ jobs:
           commit_msg: ${{ env.COMMIT_MSG }}
         run: |
           python .github/update_json.py
-      - name: Nightly Release
-        uses: andelf/nightly-release@5834076edc55cc05975561c9722043f072ac5c26
+      - name: Create or update nightly release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with: 
-          body: |
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BODY: |
             **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
             **Message:** ${{ github.event.head_commit.message }}
-            
+
             This is a nightly release [created automatically with GitHub Actions workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}).
-          files: |
-            ${{ needs.build.outputs.artifact }}
-            ${{ needs.build.outputs.artifact2 }}
-            .github/apps_nightly.json
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if gh release view nightly >/dev/null 2>&1; then
+              break
+            fi
+            if gh release create nightly --title "Nightly Release @ ${GITHUB_RUN_NUMBER}" --notes "$RELEASE_BODY" --prerelease; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to create or find nightly release after 3 attempts" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          gh release edit nightly --title "Nightly Release @ ${GITHUB_RUN_NUMBER}" --notes "$RELEASE_BODY" --prerelease
+          for attempt in 1 2 3; do
+            if gh release upload nightly "${{ needs.build.outputs.artifact }}" "${{ needs.build.outputs.artifact2 }}" .github/apps_nightly.json --clobber; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to upload nightly release assets after 3 attempts" >&2
+              exit 1
+            fi
+            sleep 5
+          done
       - name: Update apps.json in Release 1.0
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
