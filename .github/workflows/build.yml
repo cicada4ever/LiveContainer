@@ -166,7 +166,3 @@ jobs:
             gh release create 1.0 --title "1.0" --notes "Stable release metadata for this fork." --target 1.0
           fi
           gh release upload 1.0 .github/apps_ss_lc.json --clobber
-      - name: Update apps.json in Release 1.0
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload 1.0 .github/apps_ss_lc.json --clobber
