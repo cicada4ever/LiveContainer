@@ -1,3 +1,5 @@
+set -euo pipefail
+
 # copy lc
 wget https://github.com/LiveContainer/dylibify/releases/download/1.0/dylibify
 chmod +x dylibify
@@ -41,11 +43,12 @@ mv ./tmp/SideStoreSupport.framework Payload/LiveContainer.app/Frameworks
 
 # download SideStore
 cd tmp
-wget https://github.com/LiveContainer/SideStore/releases/download/nightly/SideStore.ipa
+wget https://github.com/cicada4ever/SideStore/releases/download/nightly/SideStore.ipa
 unzip SideStore.ipa
 cd ..
 
 # SideStore
+rm -rf ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework
 mv ./tmp/Payload/SideStore.app ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework
 ./dylibify ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/SideStore ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/SideStore.dylib
 rm ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/SideStore
@@ -61,16 +64,24 @@ sed -i '' 's/9SideStore20RefreshAllAppsIntentV/16SideStoreSupport20RefreshAllApp
 sed -i '' 's/9SideStore26RefreshAllAppsWidgetIntentV/16SideStoreSupport26RefreshAllAppsWidgetIntentV/g' ./Payload/LiveContainer.app/Metadata.appintents/extract.actionsdata
 
 # AltWidgetExtension
+rm -rf ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex
 mv ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/PlugIns/AltWidgetExtension.appex ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.kdt.livecontainer.LiveWidget"  ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex/Info.plist
 /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable LiveWidgetExtension"  ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex/Info.plist
 mv ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex/AltWidgetExtension ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex/LiveWidgetExtension
 
 # Sign
-rm -r .zsign_cache
-find payloadlc/Payload -type d -name "_CodeSignature" -exec rm -r {} +
+rm -rf .zsign_cache
+find Payload -type d -name "_CodeSignature" -exec rm -rf {} +
 
 ldid -S.github/sidelc/LiveWidgetExtension_adhoc.xml ./Payload/LiveContainer.app/PlugIns/LiveWidgetExtension.appex/LiveWidgetExtension
+
+# Give every CI artifact a newer installable build number. This ensures a
+# sideloader replaces an existing LiveContainer+SideStore install instead of
+# retaining its older embedded SideStore framework.
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 3.9.${GITHUB_RUN_NUMBER:-1}" ./Payload/LiveContainer.app/Info.plist
+SIDESTORE_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" ./Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/Info.plist)
+echo "Bundling SideStore build: ${SIDESTORE_BUILD}"
 
 # package
 zip -r "$scheme+SideStore.ipa" "Payload" -x "._*" -x ".DS_Store" -x "__MACOSX"
