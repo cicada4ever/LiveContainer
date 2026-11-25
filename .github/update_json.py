@@ -15,21 +15,43 @@ def prepare_description(text):
     return text
 
 def fetch_latest_release(repo_url, is_nightly: bool):
-    api_url = f"https://api.github.com/repos/{repo_url}/releases"
+    # The release workflow already knows which channel it is publishing.
+    # Fetch that exact release instead of listing every release (which wastes
+    # API quota and can hit the unauthenticated rate limit on busy forks).
+    release_path = "releases/tags/nightly" if is_nightly else "releases/latest"
+    api_url = f"https://api.github.com/repos/{repo_url}/{release_path}"
     headers = {
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
     }
+
+    # Use the workflow token. Without this header requests is anonymous even
+    # though Actions has already provided GITHUB_TOKEN to this process.
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     try:
-        response = requests.get(api_url, headers=headers)
+        response = requests.get(api_url, headers=headers, timeout=30)
+        if response.status_code in (403, 429) and "rate limit" in response.text.lower():
+            reset_at = response.headers.get("X-RateLimit-Reset")
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            raise requests.HTTPError(
+                f"GitHub API rate limit reached (remaining={remaining}, reset={reset_at}). "
+                "The request was authenticated when GITHUB_TOKEN was available.",
+                response=response,
+            )
         response.raise_for_status()
-        releases = response.json()
-        latest_release = next((
-            release for release in releases
-            if (release["tag_name"] == "nightly") == is_nightly
-        ), None)
-        return [latest_release] if latest_release else []
+        release = response.json()
+        expected_tag = "nightly" if is_nightly else None
+        if expected_tag and release.get("tag_name") != expected_tag:
+            raise RuntimeError(
+                f"Expected the nightly release tag '{expected_tag}', "
+                f"but GitHub returned '{release.get('tag_name')}'."
+            )
+        return [release]
     except requests.RequestException as e:
-        print(f"Error fetching releases: {e}")
+        print(f"Error fetching release '{release_path}': {e}")
         raise
 
 def get_file_size(url):
