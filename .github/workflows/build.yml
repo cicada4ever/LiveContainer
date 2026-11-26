@@ -76,6 +76,12 @@ jobs:
       - name: Create IPA
         run: |
           sh .github/build_github.sh
+      - name: Verify combined IPA compatibility
+        env:
+          EXPECTED_LC_BUNDLE_ID: com.kdt.livecontainer
+          EXPECTED_SIDESTORE_BUNDLE_ID: com.SideStore.SideStore
+        run: |
+          bash .github/verify-combined-ipa.sh "$scheme+SideStore.ipa"
 
       - name: Upload a Build Artifact
         uses: actions/upload-artifact@v7
