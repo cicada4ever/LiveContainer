@@ -69,6 +69,10 @@ jobs:
         with:
           name: ${{ env.archive_path }}.xcarchive.tar
           path: ${{ env.archive_path }}.xcarchive.tar
+      - name: Configure SideStore IPA source
+        run: |
+          sed -i '' 's|https://github.com/LiveContainer/SideStore/releases/download/nightly/SideStore.ipa|https://github.com/cicada4ever/SideStore/releases/download/nightly/SideStore.ipa|g' .github/build_github.sh
+
       - name: Create IPA
         run: |
           sh .github/build_github.sh
