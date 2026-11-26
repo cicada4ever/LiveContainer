@@ -161,7 +161,18 @@ struct LCNativeAppItem: View {
 
     private var listContent: some View {
         HStack(spacing: 14) {
-            iconView(size: 56)
+            ZStack(alignment: .bottomTrailing) {
+                iconView(size: 56)
+
+                if model.isSigningInProgress {
+                    ProgressView(value: model.signProgress)
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .padding(3)
+                        .background(.regularMaterial, in: Circle())
+                        .accessibilityLabel("Signing in progress")
+                }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.displayName)
@@ -169,15 +180,30 @@ struct LCNativeAppItem: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(model.version)
+                Text("\(model.version) · \(model.bundleIdentifier)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                if !model.uiRemark.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(model.uiRemark)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                HStack(spacing: 8) {
+                    statusLabels
+                    Spacer(minLength: 0)
+                }
+
+                containerLabel
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
@@ -190,7 +216,18 @@ struct LCNativeAppItem: View {
 
     private var gridContent: some View {
         VStack(spacing: 7) {
-            iconView(size: 66)
+            ZStack(alignment: .bottomTrailing) {
+                iconView(size: 66)
+
+                if model.isSigningInProgress {
+                    ProgressView(value: model.signProgress)
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .padding(3)
+                        .background(.regularMaterial, in: Circle())
+                        .accessibilityLabel("Signing in progress")
+                }
+            }
 
             Text(model.displayName)
                 .font(.caption)
@@ -205,10 +242,116 @@ struct LCNativeAppItem: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
+
+            statusIcons
+
+            if !model.uiIsShared, let container = model.uiSelectedContainer {
+                Label(container.name, systemImage: "folder")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var statusLabels: some View {
+        if model.uiIsShared {
+            statusLabel("Shared", symbol: "arrowshape.turn.up.left.fill", color: Color(uiColor: .systemOrange))
+        }
+        if model.uiIsJITNeeded && !model.uiIs32bit {
+            statusLabel("JIT required", symbol: "bolt.fill", color: Color(uiColor: .systemPurple))
+        }
+        if model.uiIs32bit {
+            statusLabel("32-bit", symbol: "cpu", color: Color(uiColor: .systemBlue))
+        }
+        if model.uiIsHidden {
+            statusLabel("Hidden", symbol: "eye.slash.fill", color: .secondary)
+        } else if model.uiIsLocked {
+            statusLabel("Locked", symbol: "lock.fill", color: Color(uiColor: .systemOrange))
+        }
+        if model.uiTweakLoaderInjectFailed {
+            statusLabel("Tweak loader issue", symbol: "exclamationmark.triangle.fill", color: Color(uiColor: .systemRed))
+        }
+        if model.isAppRunning {
+            statusLabel("Running", symbol: "circle.fill", color: Color(uiColor: .systemGreen))
+        }
+    }
+
+    @ViewBuilder
+    private var statusIcons: some View {
+        HStack(spacing: 7) {
+            if model.uiIsShared {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .foregroundStyle(Color(uiColor: .systemOrange))
+                    .accessibilityLabel("Shared app data")
+            }
+            if model.uiIsJITNeeded && !model.uiIs32bit {
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(Color(uiColor: .systemPurple))
+                    .accessibilityLabel("JIT required")
+            }
+            if model.uiIs32bit {
+                Image(systemName: "cpu")
+                    .foregroundStyle(Color(uiColor: .systemBlue))
+                    .accessibilityLabel("32-bit app")
+            }
+            if model.uiIsHidden {
+                Image(systemName: "eye.slash.fill")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Hidden app")
+            } else if model.uiIsLocked {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(Color(uiColor: .systemOrange))
+                    .accessibilityLabel("Locked app")
+            }
+            if model.uiTweakLoaderInjectFailed {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color(uiColor: .systemRed))
+                    .accessibilityLabel("Tweak loader injection failed")
+            }
+            if model.isAppRunning {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(Color(uiColor: .systemGreen))
+                    .accessibilityLabel("App is running")
+            }
+        }
+        .font(.caption2)
+        .frame(minHeight: 12)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func statusLabel(_ title: LocalizedStringKey, symbol: String, color: Color) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.caption2)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private var containerLabel: some View {
+        if model.uiIsShared {
+            Label("Shared app data", systemImage: "folder.badge.person.crop")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else if let container = model.uiSelectedContainer {
+            Label(container.name, systemImage: "folder")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            Label("lc.appBanner.noDataFolder".loc, systemImage: "folder")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private func iconView(size: CGFloat) -> some View {
