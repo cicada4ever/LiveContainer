@@ -88,6 +88,7 @@ EXPECTED_CONTAINER_FOLDER="$(/usr/libexec/PlistBuddy -c 'Print :LCContainers:0:f
 EMBEDDED_CONTAINER_FOLDER="$(/usr/libexec/PlistBuddy -c 'Print :LCContainers:0:folderName' "$SIDESTORE/LCAppInfo.plist" 2>/dev/null || true)"
 [[ -n "$EXPECTED_CONTAINER_FOLDER" ]] || fail "Repository LCAppInfo.plist has no built-in SideStore container folder."
 [[ "$EMBEDDED_CONTAINER_FOLDER" == "$EXPECTED_CONTAINER_FOLDER" ]] || fail "Embedded SideStore container folder changed: expected '$EXPECTED_CONTAINER_FOLDER', got '$EMBEDDED_CONTAINER_FOLDER'."
+cmp -s "$SOURCE_LC_APP_INFO" "$SIDESTORE/LCAppInfo.plist" || fail "Embedded SideStore LCAppInfo.plist differs from the repository's canonical file; built-in SideStore container metadata may not survive an upgrade."
 
 PLUGINS="$APP/PlugIns"
 require_dir "$PLUGINS/LiveProcess.appex"
@@ -107,5 +108,6 @@ printf '  Embedded SideStore: %s\n' "$SIDESTORE_BUNDLE_ID"
 printf '  SideStore App Group: %s\n' "$REQUIRED_SIDESTORE_GROUP"
 printf '  Built-in SideStore data UUID preserved: %s\n' "$BUILTIN_DATA_UUID"
 printf '  Built-in SideStore container folder preserved: %s\n' "$EMBEDDED_CONTAINER_FOLDER"
+printf '  Full built-in SideStore LCAppInfo.plist: identical to canonical source\n'
 printf '  SideStoreSupport, LiveProcess, LaunchAppExtension, ShareExtension, LiveWidget: present\n'
 printf '  URL schemes and App Intents: present\n'
