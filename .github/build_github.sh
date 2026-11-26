@@ -39,10 +39,16 @@ mv ./tmp/SideStoreSupport.framework Payload/LiveContainer.app/Frameworks
 /usr/libexec/PlistBuddy -c "Add :PreferenceSpecifiers:3:Key string LCOpenSideStore" ./Payload/LiveContainer.app/Settings.bundle/Root.plist
 /usr/libexec/PlistBuddy -c "Add :PreferenceSpecifiers:3:DefaultValue bool false" ./Payload/LiveContainer.app/Settings.bundle/Root.plist
 
-# download SideStore
+# download the latest MiniStore nightly IPA (MiniStore keeps the SideStore app
+# bundle/executable names required by LiveContainer's SideStore integration)
 cd tmp
-wget https://github.com/LiveContainer/SideStore/releases/download/nightly/SideStore.ipa
-unzip SideStore.ipa
+MINISTORE_IPA_URL="https://github.com/The-Big-Mini/MiniStore/releases/download/nightly/MiniStore.ipa"
+curl -fL --retry 3 --retry-delay 2 "$MINISTORE_IPA_URL" -o MiniStore.ipa
+unzip -q MiniStore.ipa
+if [ ! -d "./Payload/SideStore.app" ]; then
+  echo "Error: MiniStore nightly IPA does not contain Payload/SideStore.app; it may no longer be compatible with LiveContainer's embedding step."
+  exit 1
+fi
 cd ..
 
 # SideStore
