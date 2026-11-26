@@ -12,7 +12,7 @@ Modernize and complete the existing `LiveContainerSwiftUI` application. LiveCont
 
 1. Preserve the effective Release app bundle identifier (currently derived from `LIVECONTAINER_BUNDLE_IDENTIFIER`, default release form `com.kdt.livecontainer`) and all existing Debug/Release configuration behavior.
 2. Preserve the effective signing Team ID, application-identifier prefix, provisioning/signing configuration, and keychain access groups. The current `entitlements.xml` includes the shared `com.kdt.livecontainer.shared` keychain groups through `.127`; do not remove, reorder, rename, or regenerate these groups. Do not assume a source placeholder is the actual signing identity in the produced IPA.
-3. Preserve both existing App Groups: the SideStore group (`group.com.SideStore.SideStore`) and AltStore compatibility group (`group.com.rileytestut.AltStore`), including their effective signing entitlements.
+3. Preserve both existing App Groups: the SideStore group (`group.com.SideStore.SideStore`) and AltStore compatibility group (`group.com.rileytestut.AltStore`), including their effective signing entitlements. The `ALTAppGroups` array added to the host app's built `Info.plist` by `.github/build_github.sh` is a separate runtime contract used by SideStore's `Bundle.main.altstoreAppGroup` lookup; keep it present and keep the SideStore group in it.
 4. Preserve the main app's existing file/document behavior, file sharing, external storage security-scoped bookmarks, URL schemes, app intents, background modes, scene configuration, multiple-scene behavior, and extension bundle IDs.
 5. Preserve LiveContainer's user defaults keys and app-group defaults suite. Do not reset defaults, delete preferences, or silently change the suite name.
 6. Preserve existing file locations and formats:
@@ -26,7 +26,7 @@ Modernize and complete the existing `LiveContainerSwiftUI` application. LiveCont
    - Built-in SideStore data container: `Documents/SideStore/`
 7. Preserve `LCContainerInfo.plist` format and semantics, app/container folder names, app bundle metadata, container bookmarks, external-storage bookmarks, per-container keychain-group assignments, app group isolation, spoofed identifier settings, and existing app data UUIDs.
 8. Do not modify or replace LCBootstrap, Mach-O utilities, guest process/runtime hooks, dylib loading, TweakLoader, ZSign, JIT, LiveProcess, LaunchAppExtension, ShareExtension, or multitasking execution semantics as part of presentation work.
-9. Do not alter SideStoreSupport intent/XPC behavior, SideStore embedded executable/module naming, intent metadata/type names, App Groups, or widget integration as part of UI work.
+9. Do not alter SideStoreSupport intent/XPC behavior, SideStore embedded executable/module naming, intent metadata/type names, App Groups, or widget integration as part of UI work. Preserve the `@livecontainer` SideStore Keychain-service override (`com.SideStore.SideStore`) in `Bundle+AltStore.swift`, the host `ALTAppGroups` entry, and `.github/sidelc/LCAppInfo.plist` (including `LCDataUUID` and its container metadata). These are required to reopen the same embedded SideStore account, database, and data container.
 10. Never move, rename, purge, reset, or migrate existing user files merely to fit a new UI structure.
 
 ## Existing integration contract with SideStore
