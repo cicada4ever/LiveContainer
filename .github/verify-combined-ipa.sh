@@ -72,8 +72,22 @@ SIDESTORE_BUNDLE_ID="$(plist_value "$SIDESTORE/Info.plist" "CFBundleIdentifier")
 
 BUILTIN_DATA_UUID="$(plist_value "$SIDESTORE/LCAppInfo.plist" "LCDataUUID")"
 [[ -n "$BUILTIN_DATA_UUID" ]] || fail "Embedded SideStore LCAppInfo.plist is missing LCDataUUID."
+
+# The embedded built-in SideStore must keep the exact container identity that
+# LiveContainer ships in its source metadata. Merely having a UUID is not enough:
+# a changed UUID would point the UI at a different data directory on upgrade.
+SOURCE_LC_APP_INFO=".github/sidelc/LCAppInfo.plist"
+require_file "$SOURCE_LC_APP_INFO"
+EXPECTED_DATA_UUID="$(plist_value "$SOURCE_LC_APP_INFO" "LCDataUUID")"
+[[ -n "$EXPECTED_DATA_UUID" ]] || fail "Repository LCAppInfo.plist has no LCDataUUID."
+[[ "$BUILTIN_DATA_UUID" == "$EXPECTED_DATA_UUID" ]] || fail "Embedded SideStore LCDataUUID changed: expected '$EXPECTED_DATA_UUID', got '$BUILTIN_DATA_UUID'."
+
 CONTAINERS="$(plist_value "$SIDESTORE/LCAppInfo.plist" "LCContainers")"
 [[ "$CONTAINERS" == *"folderName"* ]] || fail "Embedded SideStore LCAppInfo.plist is missing container metadata."
+EXPECTED_CONTAINER_FOLDER="$(/usr/libexec/PlistBuddy -c 'Print :LCContainers:0:folderName' "$SOURCE_LC_APP_INFO" 2>/dev/null || true)"
+EMBEDDED_CONTAINER_FOLDER="$(/usr/libexec/PlistBuddy -c 'Print :LCContainers:0:folderName' "$SIDESTORE/LCAppInfo.plist" 2>/dev/null || true)"
+[[ -n "$EXPECTED_CONTAINER_FOLDER" ]] || fail "Repository LCAppInfo.plist has no built-in SideStore container folder."
+[[ "$EMBEDDED_CONTAINER_FOLDER" == "$EXPECTED_CONTAINER_FOLDER" ]] || fail "Embedded SideStore container folder changed: expected '$EXPECTED_CONTAINER_FOLDER', got '$EMBEDDED_CONTAINER_FOLDER'."
 
 PLUGINS="$APP/PlugIns"
 require_dir "$PLUGINS/LiveProcess.appex"
@@ -91,6 +105,7 @@ printf 'Combined IPA compatibility check passed.\n'
 printf '  LiveContainer: %s\n' "$LC_BUNDLE_ID"
 printf '  Embedded SideStore: %s\n' "$SIDESTORE_BUNDLE_ID"
 printf '  SideStore App Group: %s\n' "$REQUIRED_SIDESTORE_GROUP"
-printf '  Built-in SideStore data UUID present: yes\n'
+printf '  Built-in SideStore data UUID preserved: %s\n' "$BUILTIN_DATA_UUID"
+printf '  Built-in SideStore container folder preserved: %s\n' "$EMBEDDED_CONTAINER_FOLDER"
 printf '  SideStoreSupport, LiveProcess, LaunchAppExtension, ShareExtension, LiveWidget: present\n'
 printf '  URL schemes and App Intents: present\n'
